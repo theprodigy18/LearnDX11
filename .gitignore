@@ -1,0 +1,14 @@
+.cache/
+.vscode/
+bin/
+bin-int/
+ecc/
+
+!vendor/bin/
+
+Makefile
+gencc.sh
+compile_commands*
+.clangd
+.clang-format
+vendor/bin/premake/premake5
