@@ -47,7 +47,7 @@ files {"%{prj.location}/include/**.h", "%{prj.location}/src/**.c"}
 includedirs {"%{prj.location}", "%{prj.location}/include"}
 
 defines {"DLL_EXPORTS"}
-links {"user32", "d3d11", "dxgi", "dxguid"}
+links {"user32", "d3d11", "dxgi", "dxguid", "d3dcompiler"}
 
 -- =======================================
 -- PROJECT(Test)

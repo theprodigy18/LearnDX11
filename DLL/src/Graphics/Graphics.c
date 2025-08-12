@@ -126,3 +126,58 @@ void DROP_DestroyGraphics(GfxHandle* pHandle)
 
     *pHandle = NULL;
 }
+
+bool DROP_CreateHDRRenderTarget(const GfxHandle handle, u32 width, u32 height, ID3D11RenderTargetView** ppRTV)
+{
+    ASSERT_MSG(handle, "Graphics handle is null.");
+    ASSERT_MSG(ppRTV, "Render target view is null.");
+
+    *ppRTV = NULL;
+
+    D3D11_TEXTURE2D_DESC texDesc = {
+        .Width              = width,
+        .Height             = height,
+        .SampleDesc.Count   = 1,
+        .SampleDesc.Quality = 0,
+        .ArraySize          = 1,
+        .BindFlags          = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE,
+        .CPUAccessFlags     = 0,
+        .MiscFlags          = 0,
+        .Format             = DXGI_FORMAT_R16G16B16A16_FLOAT,
+        .MipLevels          = 1,
+        .Usage              = D3D11_USAGE_DEFAULT};
+
+    ID3D11Texture2D* pTexture = NULL;
+
+    HRESULT hr = handle->pDevice->lpVtbl->CreateTexture2D(handle->pDevice, &texDesc, NULL, &pTexture);
+    if (FAILED(hr) || !pTexture)
+    {
+        ASSERT_MSG(false, "Failed to create texture 2D.");
+        return false;
+    }
+
+    ID3D11RenderTargetView* pRTV = NULL;
+
+    hr = handle->pDevice->lpVtbl->CreateRenderTargetView(
+        handle->pDevice, (ID3D11Resource*) pTexture, NULL, &pRTV);
+    if (FAILED(hr) || !pRTV)
+    {
+        ASSERT_MSG(false, "Failed to create texture 2D.");
+        pTexture->lpVtbl->Release(pTexture);
+        return false;
+    }
+
+    ID3D11ShaderResourceView* pSRV = NULL;
+
+    hr = handle->pDevice->lpVtbl->CreateShaderResourceView(
+        handle->pDevice, (ID3D11Resource*) pTexture, NULL, &pSRV);
+    if (FAILED(hr) || !pSRV)
+    {
+        ASSERT_MSG(false, "Failed to create texture 2D.");
+        pRTV->lpVtbl->Release(pRTV);
+        pTexture->lpVtbl->Release(pTexture);
+        return false;
+    }
+
+    return true;
+}

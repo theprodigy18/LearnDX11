@@ -38,13 +38,8 @@ static inline bool DROP_MakeArena(ArenaAllocator* pArena, u64 size)
 
 static inline char* DROP_Allocate(ArenaAllocator* pArena, u64 size)
 {
-    u64 allignedSize = (size + 15) & ~15;
-
-    if (pArena->used + allignedSize > pArena->size)
-    {
-        ASSERT_MSG(false, "The size are greater than remaining memory in arena.");
-        return NULL;
-    }
+    u64 allignedSize = (size + 15) & ~15; // Aligned to 16-byte.
+    ASSERT_MSG(pArena->used + allignedSize > pArena->size, "The size are greater than remaining memory in arena.");
 
     char* memory = pArena->memory + pArena->used;
     pArena->used += allignedSize;

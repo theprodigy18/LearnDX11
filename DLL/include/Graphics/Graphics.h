@@ -19,3 +19,5 @@ typedef struct _GfxInitProps
 
 bool DROP_CreateGraphics(const GfxInitProps* pProps, GfxHandle* pHandle);
 void DROP_DestroyGraphics(GfxHandle* pHandle);
+
+bool DROP_CreateHDRRenderTarget(const GfxHandle handle, u32 width, u32 height, ID3D11RenderTargetView** ppRTV);
