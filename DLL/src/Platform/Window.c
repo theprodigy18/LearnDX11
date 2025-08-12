@@ -11,6 +11,14 @@ static LRESULT CALLBACK InternalWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
 
     switch (msg)
     {
+    case WM_SIZE:
+        if (pCallback->OnResize)
+        {
+            RECT rc;
+            GetClientRect(hwnd, &rc);
+            result = pCallback->OnResize(&rc);
+        }
+        break;
     case WM_CLOSE:
         result = pCallback->OnClose ? pCallback->OnClose() : false;
         break;

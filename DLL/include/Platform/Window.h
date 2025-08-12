@@ -12,6 +12,7 @@ typedef _WndHandle* WndHandle;
 typedef struct _WndCallback
 {
     bool (*OnClose)();
+    bool (*OnResize)(RECT* pRect);
 } WndCallback;
 
 typedef struct _WndInitProps

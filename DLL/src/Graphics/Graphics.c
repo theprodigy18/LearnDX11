@@ -127,6 +127,45 @@ void DROP_DestroyGraphics(GfxHandle* pHandle)
     *pHandle = NULL;
 }
 
+bool DROP_ResizeGraphics(GfxHandle handle, u32 width, u32 height)
+{
+    ASSERT_MSG(handle, "Graphics handle is null.");
+
+    handle->pBackBufferRTV->lpVtbl->Release(handle->pBackBufferRTV);
+    handle->pBackBufferRTV = NULL;
+
+    HRESULT hr = handle->pSwapChain->lpVtbl->ResizeBuffers(
+        handle->pSwapChain, 2, width, height, DXGI_FORMAT_B8G8R8A8_UNORM, 0);
+    if (FAILED(hr))
+    {
+        ASSERT_MSG(false, "Failed to resize buffers.");
+        return false;
+    }
+
+    ID3D11Buffer* pBackBuffer = NULL;
+
+    hr = handle->pSwapChain->lpVtbl->GetBuffer(handle->pSwapChain, 0, &IID_ID3D11Texture2D, (void**) &pBackBuffer);
+    if (FAILED(hr) || !pBackBuffer)
+    {
+        ASSERT_MSG(false, "Failed to get back buffer.");
+        return false;
+    }
+
+    ID3D11RenderTargetView* pRTV = NULL;
+
+    hr = handle->pDevice->lpVtbl->CreateRenderTargetView(
+        handle->pDevice, (ID3D11Resource*) pBackBuffer, NULL, &pRTV);
+    pBackBuffer->lpVtbl->Release(pBackBuffer);
+    if (FAILED(hr) || !pRTV)
+    {
+        ASSERT_MSG(false, "Failed to create new render target view.");
+        return false;
+    }
+
+    handle->pBackBufferRTV = pRTV;
+    return true;
+}
+
 bool DROP_CreateHDRRenderTarget(const GfxHandle handle, u32 width, u32 height, ID3D11RenderTargetView** ppRTV)
 {
     ASSERT_MSG(handle, "Graphics handle is null.");
