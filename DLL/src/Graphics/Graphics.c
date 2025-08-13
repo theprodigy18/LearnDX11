@@ -52,13 +52,13 @@ bool DROP_CreateGraphics(const GfxInitProps* pProps, GfxHandle* pHandle)
     ID3D11InfoQueue* pInfoQueue = NULL;
 
     hr = pDevice->lpVtbl->QueryInterface(pDevice, &IID_ID3D11InfoQueue, (void**) &pInfoQueue);
-    if (SUCCEEDED(hr))
+    if (SUCCEEDED(hr) && pInfoQueue)
     {
         pInfoQueue->lpVtbl->SetBreakOnSeverity(pInfoQueue, D3D11_MESSAGE_SEVERITY_CORRUPTION, TRUE);
         pInfoQueue->lpVtbl->SetBreakOnSeverity(pInfoQueue, D3D11_MESSAGE_SEVERITY_ERROR, TRUE);
         pInfoQueue->lpVtbl->SetBreakOnSeverity(pInfoQueue, D3D11_MESSAGE_SEVERITY_WARNING, TRUE);
 
-        pInfoQueue->lpVtbl->Release(pInfoQueue);
+        RELEASE(pInfoQueue);
     }
 #endif // DEBUG
 
@@ -68,22 +68,22 @@ bool DROP_CreateGraphics(const GfxInitProps* pProps, GfxHandle* pHandle)
     if (FAILED(hr) || !pBackBuffer)
     {
         ASSERT_MSG(false, "Failed to get back buffer from swapchain.");
-        pSwapChain->lpVtbl->Release(pSwapChain);
-        pContext->lpVtbl->Release(pContext);
-        pDevice->lpVtbl->Release(pDevice);
+        RELEASE(pSwapChain);
+        RELEASE(pContext);
+        RELEASE(pDevice);
         return false;
     }
 
     ID3D11RenderTargetView* pRTV = NULL;
 
     hr = pDevice->lpVtbl->CreateRenderTargetView(pDevice, (ID3D11Resource*) pBackBuffer, NULL, &pRTV);
-    pBackBuffer->lpVtbl->Release(pBackBuffer);
+    RELEASE(pBackBuffer);
     if (FAILED(hr) || !pRTV)
     {
         ASSERT_MSG(false, "Failed to create render target view.");
-        pSwapChain->lpVtbl->Release(pSwapChain);
-        pContext->lpVtbl->Release(pContext);
-        pDevice->lpVtbl->Release(pDevice);
+        RELEASE(pSwapChain);
+        RELEASE(pContext);
+        RELEASE(pDevice);
         return false;
     }
 
@@ -91,9 +91,10 @@ bool DROP_CreateGraphics(const GfxInitProps* pProps, GfxHandle* pHandle)
     if (!handle)
     {
         ASSERT_MSG(false, "Failed to allocate memory for handle.");
-        pSwapChain->lpVtbl->Release(pSwapChain);
-        pContext->lpVtbl->Release(pContext);
-        pDevice->lpVtbl->Release(pDevice);
+        RELEASE(pRTV);
+        RELEASE(pSwapChain);
+        RELEASE(pContext);
+        RELEASE(pDevice);
         return false;
     }
     handle->pDevice        = pDevice;
@@ -131,7 +132,7 @@ bool DROP_ResizeGraphics(GfxHandle handle, u32 width, u32 height)
 {
     ASSERT_MSG(handle, "Graphics handle is null.");
 
-    handle->pBackBufferRTV->lpVtbl->Release(handle->pBackBufferRTV);
+    SAFE_RELEASE(handle->pBackBufferRTV);
     handle->pBackBufferRTV = NULL;
 
     HRESULT hr = handle->pSwapChain->lpVtbl->ResizeBuffers(
@@ -155,7 +156,7 @@ bool DROP_ResizeGraphics(GfxHandle handle, u32 width, u32 height)
 
     hr = handle->pDevice->lpVtbl->CreateRenderTargetView(
         handle->pDevice, (ID3D11Resource*) pBackBuffer, NULL, &pRTV);
-    pBackBuffer->lpVtbl->Release(pBackBuffer);
+    RELEASE(pBackBuffer);
     if (FAILED(hr) || !pRTV)
     {
         ASSERT_MSG(false, "Failed to create new render target view.");
@@ -166,12 +167,10 @@ bool DROP_ResizeGraphics(GfxHandle handle, u32 width, u32 height)
     return true;
 }
 
-bool DROP_CreateHDRRenderTarget(const GfxHandle handle, u32 width, u32 height, ID3D11RenderTargetView** ppRTV)
+bool DROP_CreateHDRRenderTarget(const GfxHandle handle, u32 width, u32 height, GfxRenderTargets* pRenderTargets)
 {
     ASSERT_MSG(handle, "Graphics handle is null.");
-    ASSERT_MSG(ppRTV, "Render target view is null.");
-
-    *ppRTV = NULL;
+    ASSERT_MSG(pRenderTargets, "Render target view is null.");
 
     D3D11_TEXTURE2D_DESC texDesc = {
         .Width              = width,
@@ -202,7 +201,7 @@ bool DROP_CreateHDRRenderTarget(const GfxHandle handle, u32 width, u32 height, I
     if (FAILED(hr) || !pRTV)
     {
         ASSERT_MSG(false, "Failed to create texture 2D.");
-        pTexture->lpVtbl->Release(pTexture);
+        RELEASE(pTexture);
         return false;
     }
 
@@ -213,10 +212,16 @@ bool DROP_CreateHDRRenderTarget(const GfxHandle handle, u32 width, u32 height, I
     if (FAILED(hr) || !pSRV)
     {
         ASSERT_MSG(false, "Failed to create texture 2D.");
-        pRTV->lpVtbl->Release(pRTV);
-        pTexture->lpVtbl->Release(pTexture);
+        RELEASE(pRTV);
+        RELEASE(pTexture);
         return false;
     }
+
+    pRenderTargets->pRTV     = pRTV;
+    pRenderTargets->pSRV     = pSRV;
+    pRenderTargets->pTexture = pTexture;
+    pRenderTargets->width    = width;
+    pRenderTargets->height   = height;
 
     return true;
 }

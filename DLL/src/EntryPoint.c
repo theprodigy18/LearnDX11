@@ -5,6 +5,7 @@
 #include "Graphics/Graphics.h"
 
 #include "Resources/Shaders.h"
+#include "Resources/Mesh.h"
 
 #pragma region GLOBAL_MEMORY
 static bool InitializeGlobalMemory(u64 size);
@@ -28,8 +29,11 @@ static ID3D11VertexShader** s_pVSTable           = NULL;
 static const u32            VS_TABLE_COUNT       = 1;
 static ID3D11PixelShader**  s_pPSTable           = NULL;
 static const u32            PS_TABLE_COUNT       = 1;
+static ID3D11Buffer*        s_pTriangleVB        = NULL;
+static ID3D11InputLayout*   s_pBasicVSLayout     = NULL;
 #define BASIC_VS_INDEX 0
 #define BASIC_PS_INDEX 0
+#define TRIANGLE_VB_STRIDE 24
 #pragma endregion
 
 #pragma region ENTRYPOINT
@@ -70,6 +74,11 @@ int EntryPoint()
 
         s_gfxHandle->pContext->lpVtbl->VSSetShader(s_gfxHandle->pContext, s_pVSTable[BASIC_VS_INDEX], NULL, 0);
         s_gfxHandle->pContext->lpVtbl->PSSetShader(s_gfxHandle->pContext, s_pPSTable[BASIC_PS_INDEX], NULL, 0);
+
+        s_gfxHandle->pContext->lpVtbl->IASetInputLayout(s_gfxHandle->pContext, s_pBasicVSLayout);
+        u32 stride = TRIANGLE_VB_STRIDE;
+        u32 offset = 0;
+        s_gfxHandle->pContext->lpVtbl->IASetVertexBuffers(s_gfxHandle->pContext, 0, 1, &s_pTriangleVB, &stride, &offset);
 
         s_gfxHandle->pContext->lpVtbl->IASetPrimitiveTopology(s_gfxHandle->pContext, D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
         s_gfxHandle->pContext->lpVtbl->Draw(s_gfxHandle->pContext, 3, 0);
@@ -137,7 +146,7 @@ static bool InitializeResources()
         {
             LOG_ERROR("Failed to load vertex shader: %s.", vertexShaderList[i]);
             for (u32 j = 0; j < i; ++j)
-                pByteCodeList[j]->lpVtbl->Release(pByteCodeList[j]);
+                RELEASE(pByteCodeList[j]);
             return false;
         }
 
@@ -149,9 +158,9 @@ static bool InitializeResources()
             LOG_ERROR("Failed to create vertex shader at index %d", i);
             for (u32 j = 0; j <= i; ++j)
             {
-                pByteCodeList[j]->lpVtbl->Release(pByteCodeList[j]);
+                RELEASE(pByteCodeList[j]);
                 if (j < i)
-                    s_pVSTable[j]->lpVtbl->Release(s_pVSTable[j]);
+                    RELEASE(s_pVSTable[j]);
             }
             return false;
         }
@@ -169,8 +178,8 @@ static bool InitializeResources()
             LOG_ERROR("Failed to load pixel shader: %s.", pixelShaderList[i]);
             for (u32 j = 0; j < VS_TABLE_COUNT; ++j)
             {
-                pByteCodeList[j]->lpVtbl->Release(pByteCodeList[j]);
-                s_pVSTable[j]->lpVtbl->Release(s_pVSTable[j]);
+                RELEASE(pByteCodeList[j]);
+                RELEASE(s_pVSTable[j]);
             }
             return false;
         }
@@ -184,29 +193,92 @@ static bool InitializeResources()
             LOG_ERROR("Failed to create pixel shader at index %d", i);
             for (u32 j = 0; j < VS_TABLE_COUNT; ++j)
             {
-                pByteCodeList[j]->lpVtbl->Release(pByteCodeList[j]);
-                s_pVSTable[j]->lpVtbl->Release(s_pVSTable[j]);
+                RELEASE(pByteCodeList[j]);
+                RELEASE(s_pVSTable[j]);
             }
             for (u32 j = 0; j < i; ++j)
-                s_pPSTable[j]->lpVtbl->Release(s_pPSTable[j]);
+                RELEASE(s_pPSTable[j]);
             return false;
         }
     }
 
+    typedef struct
+    {
+        f32 pos[2];
+        f32 color[4];
+    } Vertex;
+
+    Vertex vertices[] = {
+        {.pos = {0.0f, 0.5f}, .color = {1.0f, 0.0f, 0.0f, 1.0f}},
+        {.pos = {0.5f, -0.5f}, .color = {0.0f, 1.0f, 0.0f, 1.0f}},
+        {.pos = {-0.5f, -0.5f}, .color = {0.0f, 0.0f, 1.0f, 1.0f}},
+    };
+
+    if (!DROP_CreateVertexBuffer(
+            s_gfxHandle, vertices, sizeof(vertices), &s_pTriangleVB) ||
+        !s_pTriangleVB)
+    {
+        LOG_ERROR("Failed to create triangle vertex buffer.");
+        for (u32 i = 0; i < VS_TABLE_COUNT; ++i)
+        {
+            RELEASE(pByteCodeList[i]);
+            RELEASE(s_pVSTable[i]);
+        }
+        for (u32 i = 0; i < PS_TABLE_COUNT; ++i)
+            RELEASE(s_pPSTable[i]);
+        return false;
+    }
+
+    D3D11_INPUT_ELEMENT_DESC basicVSLayouts[] = {
+        {.SemanticName         = "POSITION",
+         .SemanticIndex        = 0,
+         .Format               = DXGI_FORMAT_R32G32_FLOAT,
+         .InputSlot            = 0,
+         .AlignedByteOffset    = 0,
+         .InputSlotClass       = D3D11_INPUT_PER_VERTEX_DATA,
+         .InstanceDataStepRate = 0},
+        {.SemanticName         = "COLOR",
+         .SemanticIndex        = 0,
+         .Format               = DXGI_FORMAT_R32G32B32A32_FLOAT,
+         .InputSlot            = 0,
+         .AlignedByteOffset    = 8,
+         .InputSlotClass       = D3D11_INPUT_PER_VERTEX_DATA,
+         .InstanceDataStepRate = 0}};
+
+    if (!DROP_CreateInputLayout(
+            s_gfxHandle, basicVSLayouts, ARRAYSIZE(basicVSLayouts),
+            pByteCodeList[BASIC_VS_INDEX], &s_pBasicVSLayout) ||
+        !s_pBasicVSLayout)
+    {
+        LOG_ERROR("Failed to create input layout.");
+        s_pTriangleVB->lpVtbl->Release(s_pTriangleVB);
+        for (u32 i = 0; i < VS_TABLE_COUNT; ++i)
+        {
+            RELEASE(pByteCodeList[i]);
+            RELEASE(s_pVSTable[i]);
+        }
+        for (u32 i = 0; i < PS_TABLE_COUNT; ++i)
+            RELEASE(s_pPSTable[i]);
+        return false;
+    }
+
     for (u32 i = 0; i < VS_TABLE_COUNT; ++i)
-        pByteCodeList[i]->lpVtbl->Release(pByteCodeList[i]);
+        RELEASE(pByteCodeList[i]);
 
     return true;
 }
 static void CleanupResources()
 {
+    SAFE_RELEASE(s_pBasicVSLayout);
+    SAFE_RELEASE(s_pTriangleVB);
+
     for (u32 i = 0; i < VS_TABLE_COUNT; ++i)
     {
-        s_pVSTable[i]->lpVtbl->Release(s_pVSTable[i]);
+        SAFE_RELEASE(s_pVSTable[i]);
     }
     for (u32 i = 0; i < PS_TABLE_COUNT; ++i)
     {
-        s_pPSTable[i]->lpVtbl->Release(s_pPSTable[i]);
+        SAFE_RELEASE(s_pPSTable[i]);
     }
 }
 #pragma endregion

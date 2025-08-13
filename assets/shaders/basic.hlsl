@@ -1,14 +1,25 @@
-float4 VSMain(uint id : SV_VertexID) : SV_Position
+struct VSInput
 {
-    float2 vertices[] = {
-        {0.0, 0.5},
-        {0.5, -0.5},
-        {-0.5, -0.5}};
+    float2 pos : POSITION;
+    float4 color : COLOR;
+};
 
-    return float4(vertices[id], 0.0, 1.0);
+struct VSOutput
+{
+    float4 pos : SV_Position;
+    float4 color : COLOR;
+};
+
+VSOutput VSMain(VSInput input)
+{
+    VSOutput output;
+    output.pos   = float4(input.pos, 0.0, 1.0);
+    output.color = input.color;
+
+    return output;
 }
 
-float4 PSMain() : SV_Target
+float4 PSMain(VSOutput input) : SV_Target
 {
-    return float4(2.0, 1.0, 0.0, 1.0);
+    return input.color;
 }

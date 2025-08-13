@@ -28,7 +28,7 @@ bool DROP_CreateVertexShader(ID3D11Device* const pDevice, const wchar_t* fileNam
     if (FAILED(hr) || !pVertexShader)
     {
         ASSERT_MSG(false, "Failed to create vertex shader.");
-        pByteCode->lpVtbl->Release(pByteCode);
+        RELEASE(pByteCode);
         return false;
     }
 
@@ -36,7 +36,7 @@ bool DROP_CreateVertexShader(ID3D11Device* const pDevice, const wchar_t* fileNam
     if (ppByteCode)
         *ppByteCode = pByteCode;
     else
-        pByteCode->lpVtbl->Release(pByteCode);
+        RELEASE(pByteCode);
 
     return true;
 }
@@ -63,7 +63,7 @@ bool DROP_CreatePixelShader(ID3D11Device* const pDevice, const wchar_t* fileName
     hr = pDevice->lpVtbl->CreatePixelShader(
         pDevice, pByteCode->lpVtbl->GetBufferPointer(pByteCode),
         pByteCode->lpVtbl->GetBufferSize(pByteCode), NULL, &pPixelShader);
-    pByteCode->lpVtbl->Release(pByteCode);
+    RELEASE(pByteCode);
     if (FAILED(hr) || !pPixelShader)
     {
         ASSERT_MSG(false, "Failed to read pixel shader file.");

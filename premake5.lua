@@ -18,8 +18,7 @@ defines {"NDEBUG"}
 optimize "On"
 
 filter {"action:gmake", "configurations:Release"}
-buildoptions {"-static-libgcc", "-static-libstdc++"}
-linkoptions {"-static-libgcc", "-static-libstdc++"}
+linkoptions {"-static"}
 
 filter {"action:vs*", "configurations:Release"}
 staticruntime "On"

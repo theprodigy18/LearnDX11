@@ -16,8 +16,8 @@ typedef double f64;
 #include <stdlib.h>
 #include <string.h>
 #include <stdbool.h>
-#ifdef DEBUG
 #include <stdio.h>
+#ifdef DEBUG
 #include <stdarg.h>
 #include "Utils/Logger.h"
 #include "Utils/DebugMemory.h"
