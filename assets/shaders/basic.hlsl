@@ -19,7 +19,13 @@ VSOutput VSMain(VSInput input)
     return output;
 }
 
-float4 PSMain(VSOutput input) : SV_Target
+struct PSInput
+{
+    float4 pos : SV_Position;
+    float4 color : COLOR;
+};
+
+float4 PSMain(PSInput input) : SV_Target
 {
     return input.color;
 }

@@ -21,18 +21,26 @@ static bool      s_isRunning = true;
 #pragma endregion CORE
 
 #pragma region RESOURCES
-static bool                 InitializeResources();
-static void                 CleanupResources();
+static bool                 InitializeViewports();
+static bool                 InitializeShadersAndMeshes();
+static void                 CleanupShadersAndMeshes();
+static bool                 InitializeRenderTargets();
+static void                 CleanupRenderTargets();
 static D3D11_VIEWPORT*      s_viewportTable      = NULL;
-static const u32            VIEWPORT_TABLE_COUNT = 1;
 static ID3D11VertexShader** s_pVSTable           = NULL;
-static const u32            VS_TABLE_COUNT       = 1;
 static ID3D11PixelShader**  s_pPSTable           = NULL;
-static const u32            PS_TABLE_COUNT       = 1;
 static ID3D11Buffer*        s_pTriangleVB        = NULL;
 static ID3D11InputLayout*   s_pBasicVSLayout     = NULL;
+static GfxRenderTarget*     s_renderTargetsTable = NULL;
+#define VIEWPORT_TABLE_COUNT 1
+#define VS_TABLE_COUNT 2
+#define PS_TABLE_COUNT 2
+#define RENDER_TARGET_TABLE_COUNT 1
+#define HDR_RENDER_TARGET_INDEX 0
 #define BASIC_VS_INDEX 0
 #define BASIC_PS_INDEX 0
+#define COPY_VS_INDEX 1
+#define COPY_PS_INDEX 1
 #define TRIANGLE_VB_STRIDE 24
 #pragma endregion
 
@@ -52,7 +60,7 @@ int EntryPoint()
         return 1;
     }
 
-    if (!InitializeResources())
+    if (!InitializeViewports())
     {
         ASSERT_MSG(false, "Failed to initialize resources.");
         CleanupCore();
@@ -60,17 +68,63 @@ int EntryPoint()
         return 1;
     }
 
+    if (!InitializeShadersAndMeshes())
+    {
+        ASSERT_MSG(false, "Failed to initialize resources.");
+        CleanupCore();
+        CleanupGlobalMemory();
+        return 1;
+    }
+
+    if (!InitializeRenderTargets())
+    {
+        ASSERT_MSG(false, "Failed to initialize resources.");
+        CleanupShadersAndMeshes();
+        CleanupCore();
+        CleanupGlobalMemory();
+        return 1;
+    }
+
+    D3D11_SAMPLER_DESC samplerDesc = {
+        .Filter         = D3D11_FILTER_MIN_MAG_MIP_LINEAR,
+        .AddressU       = D3D11_TEXTURE_ADDRESS_CLAMP,
+        .AddressV       = D3D11_TEXTURE_ADDRESS_CLAMP,
+        .AddressW       = D3D11_TEXTURE_ADDRESS_CLAMP,
+        .MipLODBias     = 0.0f,
+        .MaxAnisotropy  = 1,
+        .ComparisonFunc = D3D11_COMPARISON_ALWAYS,
+        .MinLOD         = 0,
+        .MaxLOD         = D3D11_FLOAT32_MAX};
+
+    ID3D11SamplerState* plinearSampler = NULL;
+
+    HRESULT hr = s_gfxHandle->pDevice->lpVtbl->CreateSamplerState(
+        s_gfxHandle->pDevice, &samplerDesc, &plinearSampler);
+    if (FAILED(hr) || !plinearSampler)
+    {
+        ASSERT_MSG(false, "Failed to create sampler state.");
+        CleanupRenderTargets();
+        CleanupShadersAndMeshes();
+        CleanupCore();
+        CleanupGlobalMemory();
+        return 1;
+    }
+
+    ID3D11ShaderResourceView* pNullSRV = NULL;
+
     ShowWindow(s_wndHandle->hwnd, SW_SHOW);
 
     while (s_isRunning)
     {
         DROP_PollEvents();
 
+        f32 clearColor[4] = {0.0f, 0.0f, 0.0f, 1.0f};
+        // Draw normal meshes on HDR render target.
         s_gfxHandle->pContext->lpVtbl->RSSetViewports(s_gfxHandle->pContext, 1, &s_viewportTable[0]);
-        s_gfxHandle->pContext->lpVtbl->OMSetRenderTargets(s_gfxHandle->pContext, 1, &s_gfxHandle->pBackBufferRTV, NULL);
-        f32 clears[4] = {0.2f, 0.3f, 0.3f, 1.0f};
+        s_gfxHandle->pContext->lpVtbl->OMSetRenderTargets(
+            s_gfxHandle->pContext, 1, &s_renderTargetsTable[HDR_RENDER_TARGET_INDEX].pRTV, NULL);
         s_gfxHandle->pContext->lpVtbl->ClearRenderTargetView(
-            s_gfxHandle->pContext, s_gfxHandle->pBackBufferRTV, clears);
+            s_gfxHandle->pContext, s_renderTargetsTable[HDR_RENDER_TARGET_INDEX].pRTV, clearColor);
 
         s_gfxHandle->pContext->lpVtbl->VSSetShader(s_gfxHandle->pContext, s_pVSTable[BASIC_VS_INDEX], NULL, 0);
         s_gfxHandle->pContext->lpVtbl->PSSetShader(s_gfxHandle->pContext, s_pPSTable[BASIC_PS_INDEX], NULL, 0);
@@ -83,6 +137,25 @@ int EntryPoint()
         s_gfxHandle->pContext->lpVtbl->IASetPrimitiveTopology(s_gfxHandle->pContext, D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
         s_gfxHandle->pContext->lpVtbl->Draw(s_gfxHandle->pContext, 3, 0);
 
+        // Copy hdr texture to back buffer.
+        s_gfxHandle->pContext->lpVtbl->OMSetRenderTargets(s_gfxHandle->pContext, 1, &s_gfxHandle->pBackBufferRTV, NULL);
+        s_gfxHandle->pContext->lpVtbl->ClearRenderTargetView(
+            s_gfxHandle->pContext, s_gfxHandle->pBackBufferRTV, clearColor);
+
+        s_gfxHandle->pContext->lpVtbl->PSSetShaderResources(
+            s_gfxHandle->pContext, 0, 1, &s_renderTargetsTable[HDR_RENDER_TARGET_INDEX].pSRV);
+        s_gfxHandle->pContext->lpVtbl->PSSetSamplers(
+            s_gfxHandle->pContext, 0, 1, &plinearSampler);
+
+        s_gfxHandle->pContext->lpVtbl->VSSetShader(s_gfxHandle->pContext, s_pVSTable[COPY_VS_INDEX], NULL, 0);
+        s_gfxHandle->pContext->lpVtbl->PSSetShader(s_gfxHandle->pContext, s_pPSTable[COPY_PS_INDEX], NULL, 0);
+
+        s_gfxHandle->pContext->lpVtbl->IASetPrimitiveTopology(s_gfxHandle->pContext, D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+        s_gfxHandle->pContext->lpVtbl->Draw(s_gfxHandle->pContext, 3, 0);
+
+        s_gfxHandle->pContext->lpVtbl->PSSetShaderResources(
+            s_gfxHandle->pContext, 0, 1, &pNullSRV);
+
         s_gfxHandle->pSwapChain->lpVtbl->Present(s_gfxHandle->pSwapChain, 1, 0);
 
         DROP_ClearArena(TRANSIENT);
@@ -90,7 +163,8 @@ int EntryPoint()
 
     ShowWindow(s_wndHandle->hwnd, SW_HIDE);
 
-    CleanupResources();
+    CleanupRenderTargets();
+    CleanupShadersAndMeshes();
     CleanupCore();
     CleanupGlobalMemory();
 
@@ -101,7 +175,7 @@ int EntryPoint()
 #pragma endregion
 
 #pragma region RESOURCES
-static bool InitializeResources()
+static bool InitializeViewports()
 {
     // Setup viewport.
     s_viewportTable = (D3D11_VIEWPORT*) DROP_Allocate(PERSISTENT, (sizeof(D3D11_VIEWPORT) * VIEWPORT_TABLE_COUNT));
@@ -118,6 +192,10 @@ static bool InitializeResources()
     s_viewportTable[0].MinDepth = 0.0f;
     s_viewportTable[0].MaxDepth = 1.0f;
 
+    return true;
+}
+static bool InitializeShadersAndMeshes()
+{
     // Create shader.
     s_pVSTable = (ID3D11VertexShader**) DROP_Allocate(PERSISTENT, sizeof(ID3D11VertexShader*) * VS_TABLE_COUNT);
     if (!s_pVSTable)
@@ -135,8 +213,10 @@ static bool InitializeResources()
     HRESULT hr = 0;
 
     const wchar_t* vertexShaderList[] = {
-        L"assets/shaders/basic_vs.cso"};
+        L"assets/shaders/basic_vs.cso",
+        L"assets/shaders/copy_vs.cso"};
     ID3DBlob* pByteCodeList[] = {
+        NULL,
         NULL};
 
     for (u32 i = 0; i < VS_TABLE_COUNT; ++i)
@@ -167,7 +247,8 @@ static bool InitializeResources()
     }
 
     const wchar_t* pixelShaderList[] = {
-        L"assets/shaders/basic_ps.cso"};
+        L"assets/shaders/basic_ps.cso",
+        L"assets/shaders/copy_ps.cso"};
     for (u32 i = 0; i < PS_TABLE_COUNT; ++i)
     {
         ID3DBlob* pByteCode = NULL;
@@ -267,7 +348,38 @@ static bool InitializeResources()
 
     return true;
 }
-static void CleanupResources()
+static bool InitializeRenderTargets()
+{
+    s_renderTargetsTable = (GfxRenderTarget*) DROP_Allocate(
+        PERSISTENT, sizeof(GfxRenderTarget) * RENDER_TARGET_TABLE_COUNT);
+    if (!s_renderTargetsTable)
+    {
+        LOG_ERROR("Failed to allocate memory for render targets table.");
+        return false;
+    }
+
+    for (u32 i = 0; i < RENDER_TARGET_TABLE_COUNT; ++i)
+    {
+        if (!DROP_CreateHDRRenderTarget(
+                s_gfxHandle, s_wndHandle->width, s_wndHandle->height,
+                &s_renderTargetsTable[0]) ||
+            !&s_renderTargetsTable[0])
+        {
+            LOG_ERROR("Failed to create render targets at index: %d", i);
+            for (u32 j = 0; j < i; ++j)
+                DROP_DestroyRenderTarget(&s_renderTargetsTable[j]);
+            return false;
+        }
+    }
+
+    return true;
+}
+static void CleanupRenderTargets()
+{
+    for (u32 i = 0; i < RENDER_TARGET_TABLE_COUNT; ++i)
+        DROP_DestroyRenderTarget(&s_renderTargetsTable[i]);
+}
+static void CleanupShadersAndMeshes()
 {
     SAFE_RELEASE(s_pBasicVSLayout);
     SAFE_RELEASE(s_pTriangleVB);

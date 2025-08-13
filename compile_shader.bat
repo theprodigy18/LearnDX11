@@ -12,8 +12,15 @@ for %%F in (%SHADER_PATH%\*.hlsl) do (
     echo.
     echo Compiling: !FILE_NAME!.hlsl
     
-    fxc.exe /T %VS_TARGET% /E VSMain /Fo "%SHADER_PATH%\!FILE_NAME!_vs.cso" "%%F"
-    fxc.exe /T %PS_TARGET% /E PSMain /Fo "%SHADER_PATH%\!FILE_NAME!_ps.cso" "%%F"
+    fxc.exe /T %VS_TARGET% /E VSMain /Fo "%SHADER_PATH%\!FILE_NAME!_vs.cso" "%%F" >nul 2>&1
+    if errorlevel 1 (
+        echo Skipped VS for !FILE_NAME!
+    )
+
+    fxc.exe /T %PS_TARGET% /E PSMain /Fo "%SHADER_PATH%\!FILE_NAME!_ps.cso" "%%F" >nul 2>&1
+    if errorlevel 1 (
+        echo Skipped PS for !FILE_NAME!
+    )
 )
 
 

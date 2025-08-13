@@ -167,10 +167,10 @@ bool DROP_ResizeGraphics(GfxHandle handle, u32 width, u32 height)
     return true;
 }
 
-bool DROP_CreateHDRRenderTarget(const GfxHandle handle, u32 width, u32 height, GfxRenderTargets* pRenderTargets)
+bool DROP_CreateHDRRenderTarget(const GfxHandle handle, u32 width, u32 height, GfxRenderTarget* pRenderTarget)
 {
     ASSERT_MSG(handle, "Graphics handle is null.");
-    ASSERT_MSG(pRenderTargets, "Render target view is null.");
+    ASSERT_MSG(pRenderTarget, "Render target view is null.");
 
     D3D11_TEXTURE2D_DESC texDesc = {
         .Width              = width,
@@ -217,11 +217,29 @@ bool DROP_CreateHDRRenderTarget(const GfxHandle handle, u32 width, u32 height, G
         return false;
     }
 
-    pRenderTargets->pRTV     = pRTV;
-    pRenderTargets->pSRV     = pSRV;
-    pRenderTargets->pTexture = pTexture;
-    pRenderTargets->width    = width;
-    pRenderTargets->height   = height;
+    pRenderTarget->pRTV     = pRTV;
+    pRenderTarget->pSRV     = pSRV;
+    pRenderTarget->pTexture = pTexture;
+    pRenderTarget->width    = width;
+    pRenderTarget->height   = height;
 
     return true;
+}
+
+void DROP_DestroyRenderTarget(GfxRenderTarget* pRenderTarget)
+{
+    ASSERT_MSG(pRenderTarget, "Render target is null.");
+
+    if (pRenderTarget)
+    {
+        SAFE_RELEASE(pRenderTarget->pRTV);
+        SAFE_RELEASE(pRenderTarget->pSRV);
+        SAFE_RELEASE(pRenderTarget->pTexture);
+
+        pRenderTarget->pRTV     = NULL;
+        pRenderTarget->pSRV     = NULL;
+        pRenderTarget->pTexture = NULL;
+        pRenderTarget->width    = 0;
+        pRenderTarget->height   = 0;
+    }
 }
