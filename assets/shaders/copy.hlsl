@@ -21,10 +21,16 @@ struct PSInput
 };
 
 Texture2D hdrTexture : register(t0);
+Texture2D bloomTextureL : register(t1);
+Texture2D bloomTextureM : register(t2);
 
 SamplerState linearSampler : register(s0);
 
 float4 PSMain(PSInput input) : SV_Target
 {
-    return hdrTexture.Sample(linearSampler, input.uv);
+    float4 hdrColor    = hdrTexture.Sample(linearSampler, input.uv);
+    float4 bloomColorL = bloomTextureL.Sample(linearSampler, input.uv);
+    float4 bloomColorM = bloomTextureM.Sample(linearSampler, input.uv);
+
+    return bloomColorL;
 }

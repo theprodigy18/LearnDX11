@@ -25,7 +25,15 @@ struct PSInput
     float4 color : COLOR;
 };
 
+cbuffer IntensityParams : register(b0)
+{
+    float  intensity;
+    float3 padding;
+};
+
 float4 PSMain(PSInput input) : SV_Target
 {
-    return input.color;
+    float3 color = input.color.rgb;
+
+    return float4(color * intensity, input.color.a);
 }
