@@ -74,9 +74,14 @@ bool DROP_CreateGraphics(const GfxInitProps* pProps, GfxHandle* pHandle)
         return false;
     }
 
+    D3D11_RENDER_TARGET_VIEW_DESC rtvDesc = {
+        .Format             = DXGI_FORMAT_B8G8R8A8_UNORM_SRGB,
+        .ViewDimension      = D3D11_RTV_DIMENSION_TEXTURE2D,
+        .Texture2D.MipSlice = 0};
+
     ID3D11RenderTargetView* pRTV = NULL;
 
-    hr = pDevice->lpVtbl->CreateRenderTargetView(pDevice, (ID3D11Resource*) pBackBuffer, NULL, &pRTV);
+    hr = pDevice->lpVtbl->CreateRenderTargetView(pDevice, (ID3D11Resource*) pBackBuffer, &rtvDesc, &pRTV);
     RELEASE(pBackBuffer);
     if (FAILED(hr) || !pRTV)
     {

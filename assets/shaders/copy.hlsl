@@ -32,5 +32,7 @@ float4 PSMain(PSInput input) : SV_Target
     float4 bloomColorL = bloomTextureL.Sample(linearSampler, input.uv);
     float4 bloomColorM = bloomTextureM.Sample(linearSampler, input.uv);
 
-    return bloomColorL;
+    float4 bloom = (bloomColorL + bloomColorM);
+
+    return hdrColor + bloom;
 }

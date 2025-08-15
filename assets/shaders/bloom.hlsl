@@ -18,20 +18,15 @@ SamplerState linearSampler : register(s0);
 
 float4 PSMain(PSInput input) : SV_Target
 {
-    // Test sampling di koordinat yang pasti ada content
-    float3 color = hdrTexture.Sample(linearSampler, input.uv).rgb;
-    return float4(color, 1.0);
+    float4 result = hdrTexture.Sample(linearSampler, input.uv) * weightCenter;
 
-    // return hdrTexture.Sample(linearSampler, input.uv);
-    // float4 result = color * weightCenter;
+    float2 neighbourUV = horizontal ? float2(texelSize.x, 0) : float2(0, texelSize.y);
 
-    // float2 neighbourUV = horizontal ? float2(texelSize.x, 0) : float2(0, texelSize.y);
+    for (uint i = 1; i < 5; ++i)
+    {
+        result += hdrTexture.Sample(linearSampler, input.uv + neighbourUV * i) * weights[i - 1];
+        result += hdrTexture.Sample(linearSampler, input.uv - neighbourUV * i) * weights[i - 1];
+    }
 
-    // for (uint i = 1; i < 5; ++i)
-    // {
-    //     result += hdrTexture.Sample(linearSampler, input.uv + neighbourUV * i) * weights[i - 1];
-    //     result += hdrTexture.Sample(linearSampler, input.uv - neighbourUV * i) * weights[i - 1];
-    // }
-
-    // return float4(1.0, 0.0, 0.0, 1.0);
+    return result;
 }

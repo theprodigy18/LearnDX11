@@ -27,6 +27,7 @@ static void                 CleanupShadersAndMeshes();
 static bool                 InitializeRenderTargets();
 static void                 CleanupRenderTargets();
 static D3D11_VIEWPORT*      s_viewportTable       = NULL;
+static f32*                 s_viewportDivider     = NULL;
 static ID3D11VertexShader** s_pVSTable            = NULL;
 static ID3D11PixelShader**  s_pPSTable            = NULL;
 static ID3D11Buffer*        s_pTriangleVB         = NULL;
@@ -72,7 +73,7 @@ typedef struct
 #pragma region ENTRYPOINT
 static void RenderBloomPass(
     const GfxRenderTarget* pCurrent, const GfxRenderTarget* pFormer, i32 horizontal,
-    ID3D11ShaderResourceView* pNullSRV, ID3D11Buffer* pBloomCBuffer, const f32* clearColor, ID3D11SamplerState* pLinearSample);
+    ID3D11ShaderResourceView* pNullSRV, ID3D11Buffer* pBloomCBuffer, const f32* clearColor);
 
 int EntryPoint()
 {
@@ -214,7 +215,7 @@ int EntryPoint()
         if (SUCCEEDED(hr))
         {
             IntensityParams* pParams = (IntensityParams*) mappedResource.pData;
-            pParams->intensity       = 5.0f;
+            pParams->intensity       = 3.0f;
             s_gfxHandle->pContext->lpVtbl->Unmap(s_gfxHandle->pContext, (ID3D11Resource*) pIntensityCBuffer, 0);
         }
         s_gfxHandle->pContext->lpVtbl->PSSetConstantBuffers(s_gfxHandle->pContext, 0, 1, &pIntensityCBuffer);
@@ -252,22 +253,22 @@ int EntryPoint()
         s_gfxHandle->pContext->lpVtbl->RSSetViewports(s_gfxHandle->pContext, 1, &s_viewportTable[VIEWPORT_HALFSIZE_INDEX]);
         RenderBloomPass(
             &s_renderTargetsTable[BLOOM0_LARGE_RENDER_TARGET_INDEX],
-            &s_renderTargetsTable[HDR_RENDER_TARGET_INDEX],
-            1, pNullSRV, pBloomCBuffer, clearColor, plinearSampler);
+            &s_renderTargetsTable[BRIGHTPASS_RENDER_TARGET_INDEX],
+            1, pNullSRV, pBloomCBuffer, clearColor);
         RenderBloomPass(
             &s_renderTargetsTable[BLOOM1_LARGE_RENDER_TARGET_INDEX],
             &s_renderTargetsTable[BLOOM0_LARGE_RENDER_TARGET_INDEX],
-            0, pNullSRV, pBloomCBuffer, clearColor, plinearSampler);
+            0, pNullSRV, pBloomCBuffer, clearColor);
 
         s_gfxHandle->pContext->lpVtbl->RSSetViewports(s_gfxHandle->pContext, 1, &s_viewportTable[VIEWPORT_QUARTERSIZE_INDEX]);
         RenderBloomPass(
             &s_renderTargetsTable[BLOOM0_MEDIUM_RENDER_TARGET_INDEX],
             &s_renderTargetsTable[BRIGHTPASS_RENDER_TARGET_INDEX],
-            1, pNullSRV, pBloomCBuffer, clearColor, plinearSampler);
+            1, pNullSRV, pBloomCBuffer, clearColor);
         RenderBloomPass(
             &s_renderTargetsTable[BLOOM1_MEDIUM_RENDER_TARGET_INDEX],
             &s_renderTargetsTable[BLOOM0_MEDIUM_RENDER_TARGET_INDEX],
-            0, pNullSRV, pBloomCBuffer, clearColor, plinearSampler);
+            0, pNullSRV, pBloomCBuffer, clearColor);
 
         s_gfxHandle->pContext->lpVtbl->RSSetViewports(s_gfxHandle->pContext, 1, &s_viewportTable[VIEWPORT_FULLSIZE_INDEX]);
         // Copy hdr texture to back buffer.
@@ -312,7 +313,7 @@ int EntryPoint()
 
 static void RenderBloomPass(
     const GfxRenderTarget* pCurrent, const GfxRenderTarget* pFormer, i32 horizontal,
-    ID3D11ShaderResourceView* pNullSRV, ID3D11Buffer* pBloomCBuffer, const f32* clearColor, ID3D11SamplerState* pLinearSample)
+    ID3D11ShaderResourceView* pNullSRV, ID3D11Buffer* pBloomCBuffer, const f32* clearColor)
 {
     s_gfxHandle->pContext->lpVtbl->OMSetRenderTargets(
         s_gfxHandle->pContext, 1, &pCurrent->pRTV, NULL);
@@ -324,7 +325,6 @@ static void RenderBloomPass(
 
     s_gfxHandle->pContext->lpVtbl->PSSetShaderResources(
         s_gfxHandle->pContext, 0, 1, &pFormer->pSRV);
-    s_gfxHandle->pContext->lpVtbl->PSSetSamplers(s_gfxHandle->pContext, 0, 1, &pLinearSample);
 
     D3D11_MAPPED_SUBRESOURCE mappedResource;
 
@@ -362,26 +362,26 @@ static bool InitializeViewports()
         return false;
     }
 
-    s_viewportTable[0].Width    = s_wndHandle->width;
-    s_viewportTable[0].Height   = s_wndHandle->height;
-    s_viewportTable[0].TopLeftX = 0;
-    s_viewportTable[0].TopLeftY = 0;
-    s_viewportTable[0].MinDepth = 0.0f;
-    s_viewportTable[0].MaxDepth = 1.0f;
+    s_viewportDivider = (f32*) DROP_Allocate(PERSISTENT, sizeof(f32) * VIEWPORT_TABLE_COUNT);
+    if (!s_viewportDivider)
+    {
+        LOG_ERROR("Failed to allocate memory for viewport divider.");
+        return false;
+    }
 
-    s_viewportTable[1].Width    = s_wndHandle->width / 2.0f;
-    s_viewportTable[1].Height   = s_wndHandle->height / 2.0f;
-    s_viewportTable[1].TopLeftX = 0;
-    s_viewportTable[1].TopLeftY = 0;
-    s_viewportTable[1].MinDepth = 0.0f;
-    s_viewportTable[1].MaxDepth = 1.0f;
+    s_viewportDivider[0] = 1;
+    s_viewportDivider[1] = 2;
+    s_viewportDivider[2] = 4;
 
-    s_viewportTable[2].Width    = s_wndHandle->width / 4.0f;
-    s_viewportTable[2].Height   = s_wndHandle->height / 4.0f;
-    s_viewportTable[2].TopLeftX = 0;
-    s_viewportTable[2].TopLeftY = 0;
-    s_viewportTable[2].MinDepth = 0.0f;
-    s_viewportTable[2].MaxDepth = 1.0f;
+    for (u32 i = 0; i < VIEWPORT_TABLE_COUNT; ++i)
+    {
+        s_viewportTable[0].Width    = s_wndHandle->width / s_viewportDivider[i];
+        s_viewportTable[0].Height   = s_wndHandle->height / s_viewportDivider[i];
+        s_viewportTable[0].TopLeftX = 0;
+        s_viewportTable[0].TopLeftY = 0;
+        s_viewportTable[0].MinDepth = 0.0f;
+        s_viewportTable[0].MaxDepth = 1.0f;
+    }
 
     return true;
 }
@@ -483,9 +483,9 @@ static bool InitializeShadersAndMeshes()
     } Vertex;
 
     Vertex vertices[] = {
-        {.pos = {0.0f, 0.5f}, .color = {2.0f, 0.5f, 0.2f, 1.0f}},   // Brighter red
-        {.pos = {0.5f, -0.5f}, .color = {0.2f, 2.0f, 0.2f, 1.0f}},  // Brighter green
-        {.pos = {-0.5f, -0.5f}, .color = {0.2f, 0.2f, 2.0f, 1.0f}}, // Brighter blue
+        {.pos = {0.0f, 0.5f}, .color = {0.12f, 0.5f, 0.2f, 1.0f}},  // Brighter red
+        {.pos = {0.5f, -0.5f}, .color = {0.2f, 0.0f, 0.2f, 1.0f}},  // Brighter green
+        {.pos = {-0.5f, -0.5f}, .color = {0.2f, 0.2f, 0.5f, 1.0f}}, // Brighter blue
     };
 
     if (!DROP_CreateVertexBuffer(
@@ -626,8 +626,8 @@ static bool OnResize(RECT* pRect)
 
     for (u32 i = 0; i < VIEWPORT_TABLE_COUNT; ++i)
     {
-        s_viewportTable[i].Width  = width;
-        s_viewportTable[i].Height = height;
+        s_viewportTable[i].Width  = width / s_viewportDivider[i];
+        s_viewportTable[i].Height = height / s_viewportDivider[i];
     }
 
     for (u32 i = 0; i < RENDER_TARGET_TABLE_COUNT; ++i)
